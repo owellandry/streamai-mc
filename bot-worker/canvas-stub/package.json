@@ -1,0 +1,6 @@
+{
+  "name": "canvas",
+  "version": "2.11.2",
+  "main": "index.js",
+  "description": "No-op stub — prismarine-viewer only uses canvas server-side for name tags, real 3D is browser WebGL"
+}

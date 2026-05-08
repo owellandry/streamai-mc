@@ -75,8 +75,11 @@ export async function startStream(config: StreamConfig): Promise<void> {
     headless: true,
     args: [
       "--no-sandbox", "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
       "--enable-webgl", "--use-gl=swiftshader",
+      "--enable-unsafe-swiftshader",
       "--ignore-gpu-blocklist", "--ignore-gpu-blacklist",
+      "--disable-gpu-sandbox",
       `--window-size=${width},${height}`,
       "--hide-scrollbars", "--mute-audio", "--autoplay-policy=no-user-gesture-required",
     ],

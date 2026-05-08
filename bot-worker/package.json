@@ -10,6 +10,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "canvas": "file:./canvas-stub",
     "minecraft-data": "^3.109.1",
     "mineflayer": "^4.37.1",
     "mineflayer-armor-manager": "^2.0.1",
