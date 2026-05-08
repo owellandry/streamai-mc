@@ -76,6 +76,11 @@ const startTime     = Date.now();
 const intervals: ReturnType<typeof setInterval>[] = [];
 let httpServer: any = null;
 
+// Stuck detection
+let lastPosition: { x: number; y: number; z: number } | null = null;
+let stuckCounter = 0;
+const STUCK_THRESHOLD = 5; // 5 ticks (~12.5 seconds) in same position = stuck
+
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 function inv()  { return bot.inventory.items(); }
 function invCount(name: string): number {
@@ -633,67 +638,71 @@ function buildTasks(): Task[] {
 
 async function modeSelfPreservation(): Promise<boolean> {
   if (!bot.entity) return false;
-  // Escape water
-  const block = bot.blockAt(bot.entity.position);
-  const below = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
-  const isInWater = block?.name === "water" || block?.name === "flowing_water" ||
-      below?.name === "water" || below?.name === "flowing_water";
-  if (isInWater) {
-    bot.setControlState("jump", true);
-    const myPos = bot.entity.position;
+  try {
+    // Escape water
+    const block = bot.blockAt(bot.entity.position);
+    const below = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
+    const isInWater = block?.name === "water" || block?.name === "flowing_water" ||
+        below?.name === "water" || below?.name === "flowing_water";
+    if (isInWater) {
+      bot.setControlState("jump", true);
+      const myPos = bot.entity.position;
 
-    // Find the absolute closest solid block by expanding radius
-    let bestLand: { x: number; y: number; z: number; dist: number } | null = null;
-    for (let radius = 1; radius <= 25 && !bestLand; radius++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        for (let dz = -radius; dz <= radius; dz++) {
-          if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue; // only check perimeter
-          for (let dy = -2; dy <= 3; dy++) {
-            const tx = Math.floor(myPos.x) + dx;
-            const ty = Math.floor(myPos.y) + dy;
-            const tz = Math.floor(myPos.z) + dz;
-            const blk = bot.blockAt(new Vec3(tx, ty, tz));
-            if (!blk || blk.boundingBox !== "block") continue;
-            if (blk.name.includes("water") || blk.name.includes("lava")) continue;
-            // Check block above is walkable (air or non-water)
-            const above = bot.blockAt(new Vec3(tx, ty + 1, tz));
-            if (above && above.name.includes("water")) continue;
-            const dist = myPos.distanceTo(new Vec3(tx, ty, tz));
-            if (!bestLand || dist < bestLand.dist) {
-              bestLand = { x: tx + 0.5, y: ty + 1, z: tz + 0.5, dist };
+      // Find the absolute closest solid block by expanding radius
+      let bestLand: { x: number; y: number; z: number; dist: number } | null = null;
+      for (let radius = 1; radius <= 25 && !bestLand; radius++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          for (let dz = -radius; dz <= radius; dz++) {
+            if (Math.abs(dx) !== radius && Math.abs(dz) !== radius) continue; // only check perimeter
+            for (let dy = -2; dy <= 3; dy++) {
+              const tx = Math.floor(myPos.x) + dx;
+              const ty = Math.floor(myPos.y) + dy;
+              const tz = Math.floor(myPos.z) + dz;
+              const blk = bot.blockAt(new Vec3(tx, ty, tz));
+              if (!blk || blk.boundingBox !== "block") continue;
+              if (blk.name.includes("water") || blk.name.includes("lava")) continue;
+              // Check block above is walkable (air or non-water)
+              const above = bot.blockAt(new Vec3(tx, ty + 1, tz));
+              if (above && above.name.includes("water")) continue;
+              const dist = myPos.distanceTo(new Vec3(tx, ty, tz));
+              if (!bestLand || dist < bestLand.dist) {
+                bestLand = { x: tx + 0.5, y: ty + 1, z: tz + 0.5, dist };
+              }
             }
           }
         }
       }
-    }
 
-    if (bestLand) {
-      console.log(`[${BOT_NAME}] 🏊 nadando a tierra (${Math.round(bestLand.dist)}m)`);
-      const target = new Vec3(bestLand.x, bestLand.y, bestLand.z);
-      await bot.lookAt(target);
-      bot.setControlState("forward", true);
-      const swimTime = Math.min(Math.max(bestLand.dist * 500, 2000), 10000);
-      await sleep(swimTime);
-      bot.setControlState("forward", false);
-    } else {
-      console.log(`[${BOT_NAME}] 🏊 no hay tierra, nadando random`);
-      const angle = Math.random() * Math.PI * 2;
-      await bot.look(angle, 0);
-      bot.setControlState("forward", true);
-      await sleep(5000);
-      bot.setControlState("forward", false);
+      if (bestLand) {
+        console.log(`[${BOT_NAME}] 🏊 nadando a tierra (${Math.round(bestLand.dist)}m)`);
+        const target = new Vec3(bestLand.x, bestLand.y, bestLand.z);
+        await bot.lookAt(target);
+        bot.setControlState("forward", true);
+        const swimTime = Math.min(Math.max(bestLand.dist * 500, 2000), 10000);
+        await sleep(swimTime);
+        bot.setControlState("forward", false);
+      } else {
+        console.log(`[${BOT_NAME}] 🏊 no hay tierra, nadando random`);
+        const angle = Math.random() * Math.PI * 2;
+        await bot.look(angle, 0);
+        bot.setControlState("forward", true);
+        await sleep(5000);
+        bot.setControlState("forward", false);
+      }
+      bot.setControlState("jump", false);
+      return true;
     }
-    bot.setControlState("jump", false);
-    return true;
-  }
-  // Flee if dying
-  if ((bot.health ?? 20) < 6) {
-    console.log(`[${BOT_NAME}] ❗ HP baja (${(bot.health ?? 0).toFixed(1)}), huyendo`);
-    await skills.avoidEnemies(bot, 16); flushLog();
-    for (const food of ["cooked_beef", "cooked_porkchop", "bread", "golden_apple", "apple", "cooked_chicken"]) {
-      if (invCount(food) > 0) { await skills.consume(bot, food); flushLog(); break; }
+    // Flee if dying
+    if ((bot.health ?? 20) < 6) {
+      console.log(`[${BOT_NAME}] ❗ HP baja (${(bot.health ?? 0).toFixed(1)}), huyendo`);
+      await skills.avoidEnemies(bot, 16); flushLog();
+      for (const food of ["cooked_beef", "cooked_porkchop", "bread", "golden_apple", "apple", "cooked_chicken"]) {
+        if (invCount(food) > 0) { await skills.consume(bot, food); flushLog(); break; }
+      }
+      return true;
     }
-    return true;
+  } catch (e: any) {
+    console.warn(`[${BOT_NAME}] error en modeSelfPreservation: ${e?.message}`);
   }
   return false;
 }
@@ -772,7 +781,40 @@ async function tick() {
   try {
     // Natural head movement for viewer
     await naturalLook();
-    
+
+    // Stuck detection: if bot hasn't moved in a while, try to unstick
+    const pos = bot.entity.position;
+    if (lastPosition) {
+      const dist = Math.sqrt(
+        Math.pow(pos.x - lastPosition.x, 2) +
+        Math.pow(pos.y - lastPosition.y, 2) +
+        Math.pow(pos.z - lastPosition.z, 2)
+      );
+      if (dist < 0.5) {
+        stuckCounter++;
+        if (stuckCounter >= STUCK_THRESHOLD) {
+          console.log(`[${BOT_NAME}] 🔄 Detectado stuck - intentando liberar...`);
+          // Try multiple unstuck strategies
+          bot.setControlState("jump", true);
+          await sleep(200);
+          bot.setControlState("jump", false);
+          await sleep(200);
+          // Random direction walk
+          const angle = Math.random() * Math.PI * 2;
+          await bot.look(angle, 0);
+          bot.setControlState("forward", true);
+          await sleep(1500);
+          bot.setControlState("forward", false);
+          stuckCounter = 0;
+          return;
+        }
+      } else {
+        stuckCounter = 0;
+      }
+    }
+    lastPosition = { x: pos.x, y: pos.y, z: pos.z };
+
+    // Priority order: survival first, then objectives
     if (await modeSelfPreservation()) return;
     if (await modeNightSafety()) return;
     if (await modeSelfDefense()) return;
@@ -785,7 +827,8 @@ async function tick() {
     const ready = tasks.filter(isTaskReady);
 
     if (ready.length > 0) {
-      const task = ready[0]!;
+      // Prioritize tasks based on importance and current needs
+      const task = prioritizeTasks(ready);
       const stage = getStage();
       console.log(`[${BOT_NAME}] 🎯 Stage: ${stage} | HP:${(bot.health ?? 0).toFixed(0)} | Food:${bot.food} | ${task.title} | ${logInv()}`);
       currentGoal = task.title;
@@ -794,10 +837,10 @@ async function tick() {
       return;
     }
 
-    // No tasks ready — explore to find resources
+    // No tasks ready — explore intelligently to find resources
     const hasBasicResources = invCountMatch(/_log$/) > 0 || invCountMatch(/_planks$/) > 0 || hasAny("wooden_pickaxe", "stone_pickaxe", "iron_pickaxe");
     if (!hasBasicResources) {
-      // In a desert or barren area — do long-range exploration
+      // In a desert or barren area — do long-range exploration for trees
       await longRangeExplore("tree");
     } else {
       currentGoal = "explorando";
@@ -809,6 +852,48 @@ async function tick() {
     isBusy = false;
     bot.interrupt_code = false;
   }
+}
+
+// Prioritize tasks based on urgency and current situation
+function prioritizeTasks(tasks: Task[]): Task {
+  if (tasks.length === 1) return tasks[0]!;
+
+  // Critical survival needs come first
+  const lowHealth = (bot.health ?? 20) < 10;
+  const lowFood = (bot.food ?? 20) < 8;
+  const isNightTime = isNight();
+
+  // Priority scoring
+  const scored = tasks.map(task => {
+    let priority = 0;
+
+    // Food is critical when low
+    if (task.id === "hunt-food" && lowFood) priority += 100;
+
+    // Bed is critical at night
+    if (task.id === "get-bed" && isNightTime && !hasAny("bed")) priority += 90;
+
+    // Tools are high priority without them
+    if (task.id.includes("pickaxe") && !hasAny("pickaxe")) priority += 80;
+    if (task.id.includes("sword") && !hasAny("sword")) priority += 70;
+
+    // Early game progression is important
+    if (task.id === "collect-logs") priority += 60;
+    if (task.id === "craft-table") priority += 55;
+    if (task.id === "craft-planks") priority += 50;
+
+    // Armor for safety
+    if (task.id.includes("armor") && lowHealth) priority += 65;
+
+    // Diamonds and advanced items lower priority
+    if (task.id.includes("diamond")) priority += 30;
+
+    return { task, priority };
+  });
+
+  // Sort by priority descending
+  scored.sort((a, b) => b.priority - a.priority);
+  return scored[0]!.task;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
