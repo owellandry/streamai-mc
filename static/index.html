@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StreamAI-MC</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0f0f13;
+      --card:    #18181f;
+      --border:  #2a2a36;
+      --accent:  #7c3aed;
+      --accent2: #4f46e5;
+      --green:   #22c55e;
+      --red:     #ef4444;
+      --yellow:  #eab308;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 { font-size: 1.25rem; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+
+    .badge {
+      background: color-mix(in srgb, var(--green) 15%, transparent);
+      color: var(--green);
+      border: 1px solid color-mix(in srgb, var(--green) 30%, transparent);
+      padding: .2rem .6rem;
+      border-radius: 9999px;
+      font-size: .75rem;
+      font-weight: 600;
+    }
+
+    main { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Bot grid ── */
+    .bots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .bot-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: 1.25rem;
+      transition: border-color .2s;
+    }
+    .bot-card:hover { border-color: var(--accent); }
+
+    .bot-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .75rem;
+    }
+
+    .bot-avatar {
+      width: 42px; height: 42px;
+      border-radius: .5rem;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    .bot-name { font-weight: 700; font-size: 1rem; }
+    .bot-user { color: var(--muted); font-size: .8rem; }
+
+    .bot-personality {
+      color: var(--muted);
+      font-size: .8rem;
+      line-height: 1.5;
+      margin-bottom: 1rem;
+      border-left: 2px solid var(--border);
+      padding-left: .6rem;
+    }
+
+    .platforms { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
+
+    .platform-chip {
+      display: flex; align-items: center; gap: .3rem;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+      color: var(--text);
+      padding: .2rem .55rem;
+      border-radius: .4rem;
+      font-size: .75rem;
+    }
+
+    .platform-chip .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green);
+    }
+
+    .platform-chip button {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: .85rem; line-height: 1;
+      padding: 0 0 0 .2rem;
+    }
+    .platform-chip button:hover { color: var(--red); }
+
+    .bot-actions { display: flex; gap: .5rem; }
+
+    .btn {
+      padding: .45rem .9rem;
+      border-radius: .5rem;
+      border: none;
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-success  { background: var(--green);  color: #000; }
+    .btn-danger   { background: var(--red);    color: #fff; }
+    .btn-ghost    {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+
+    .btn-sm { padding: .3rem .65rem; font-size: .75rem; }
+
+    /* ── Add Bot Form ── */
+    .add-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: .75rem;
+      margin-top: 1rem;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: .3rem; }
+    .form-group label { font-size: .8rem; color: var(--muted); font-weight: 500; }
+    .form-group input,
+    .form-group textarea {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: .45rem;
+      padding: .5rem .75rem;
+      color: var(--text);
+      font-size: .875rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .form-group input:focus,
+    .form-group textarea:focus { border-color: var(--accent); }
+    .form-group textarea { resize: vertical; min-height: 70px; }
+    .form-group.span2 { grid-column: span 2; }
+
+    .form-footer { margin-top: 1rem; display: flex; justify-content: flex-end; gap: .5rem; }
+
+    /* ── Add Key Modal ── */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: .75rem;
+      padding: 1.5rem;
+      width: min(420px, 90vw);
+    }
+
+    .modal h3 { margin-bottom: 1rem; }
+
+    .platform-select {
+      display: flex; gap: .5rem; margin-bottom: .75rem;
+    }
+
+    .plat-btn {
+      flex: 1; padding: .45rem; border-radius: .45rem;
+      border: 1px solid var(--border);
+      background: var(--bg); color: var(--muted);
+      cursor: pointer; font-size: .8rem; font-weight: 600;
+      transition: all .15s;
+    }
+    .plat-btn.active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--text);
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      background: var(--card); border: 1px solid var(--border);
+      color: var(--text); padding: .75rem 1.25rem;
+      border-radius: .6rem; font-size: .875rem;
+      opacity: 0; transform: translateY(8px);
+      transition: all .25s;
+      pointer-events: none;
+    }
+    #toast.show { opacity: 1; transform: none; }
+
+    .empty-state {
+      text-align: center; color: var(--muted);
+      padding: 2rem; font-size: .9rem;
+    }
+
+    .status-bar {
+      display: flex; align-items: center; gap: 1rem;
+      margin-left: auto;
+      font-size: .8rem; color: var(--muted);
+    }
+    .status-bar .dot { width:8px; height:8px; border-radius:50%; background: var(--green); }
+  </style>
+</head>
+<body>
+
+<header>
+  <span style="font-size:1.5rem">🎮</span>
+  <h1>Stream<span>AI</span>-MC</h1>
+  <span class="badge">v0.1.0</span>
+  <div class="status-bar">
+    <span class="dot"></span>
+    <span id="status-text">conectando...</span>
+  </div>
+</header>
+
+<main>
+  <!-- Bots activos -->
+  <p class="section-title">Streamers activos</p>
+  <div class="bots-grid" id="bots-grid">
+    <div class="empty-state">Cargando bots...</div>
+  </div>
+
+  <!-- Añadir bot -->
+  <p class="section-title">Añadir nuevo streamer</p>
+  <div class="add-section">
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Nombre del personaje</label>
+        <input id="f-name" type="text" placeholder="Ej: Luna" />
+      </div>
+      <div class="form-group">
+        <label>Usuario de Minecraft</label>
+        <input id="f-user" type="text" placeholder="Ej: luna_bot" />
+      </div>
+      <div class="form-group span2">
+        <label>Personalidad (prompt)</label>
+        <textarea id="f-personality" placeholder="Ej: Eres Luna, una jugadora curiosa que siempre explora cuevas..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Voz (Piper)</label>
+        <input id="f-voice" type="text" placeholder="es_ES-davefx-medium" />
+      </div>
+    </div>
+    <div class="form-footer">
+      <button class="btn btn-ghost" onclick="clearForm()">Limpiar</button>
+      <button class="btn btn-primary" onclick="createBot()">➕ Crear streamer</button>
+    </div>
+  </div>
+</main>
+
+<!-- Modal TEST -->
+<div class="modal-overlay" id="test-modal">
+  <div class="modal" style="width:min(520px,95vw)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h3>🧪 Modo Test — <span id="test-bot-name"></span></h3>
+      <span id="test-status-badge" class="badge" style="background:color-mix(in srgb,var(--yellow) 15%,transparent);color:var(--yellow);border-color:color-mix(in srgb,var(--yellow) 30%,transparent)">conectando...</span>
+    </div>
+    <div id="test-state" style="background:var(--bg);border:1px solid var(--border);border-radius:.5rem;padding:1rem;font-size:.8rem;font-family:monospace;min-height:140px;color:var(--muted)">
+      Esperando conexión al servidor MC...
+    </div>
+    <div class="form-footer" style="margin-top:1rem">
+      <button class="btn btn-ghost" onclick="closeTestModal()">Cerrar</button>
+      <button class="btn btn-danger" id="test-stop-btn" onclick="stopTestBot()">⏹ Desconectar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal añadir stream key -->
+<div class="modal-overlay" id="key-modal">
+  <div class="modal">
+    <h3>🔑 Añadir stream key</h3>
+    <input type="hidden" id="modal-bot-id" />
+    <div class="platform-select">
+      <button class="plat-btn active" data-plat="twitch"  onclick="selectPlat(this)">Twitch</button>
+      <button class="plat-btn"        data-plat="kick"    onclick="selectPlat(this)">Kick</button>
+      <button class="plat-btn"        data-plat="youtube" onclick="selectPlat(this)">YouTube</button>
+    </div>
+    <div class="form-group" style="margin-bottom:.6rem">
+      <label>RTMP URL</label>
+      <input id="m-rtmp" type="text" placeholder="rtmp://live.twitch.tv/app" />
+    </div>
+    <div class="form-group" style="margin-bottom:1rem">
+      <label>Stream Key</label>
+      <input id="m-key" type="password" placeholder="live_xxxxxxxxxx" />
+    </div>
+    <div class="form-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveKey()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const RTMP_URLS = {
+  twitch:  "rtmp://live.twitch.tv/app",
+  kick:    "rtmp://fa723fc1b171.global-contribute.live-video.net/app",
+  youtube: "rtmp://a.rtmp.youtube.com/live2",
+};
+
+const BOT_EMOJIS = ["🤖","🎮","⚔️","🏃","🏗️","🌿","🔥","💫","🎯","🐉"];
+const getBotEmoji = (name) => BOT_EMOJIS[name.charCodeAt(0) % BOT_EMOJIS.length];
+
+let botsCache = [];
+let keysCache  = {};
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+async function apiFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
+  return res.json();
+}
+
+// ── Load bots ──────────────────────────────────────────────────────────────
+async function loadBots() {
+  const grid = document.getElementById("bots-grid");
+  try {
+    const data = await apiFetch("/api/bots");
+    botsCache = data.bots ?? [];
+
+    // cargar keys de todos los bots en paralelo
+    await Promise.all(botsCache.map(async b => {
+      try {
+        const kdata = await apiFetch(`/api/bots/${b.id}/stream_keys`);
+        keysCache[b.id] = kdata.stream_keys ?? [];
+      } catch {
+        keysCache[b.id] = [];
+      }
+    }));
+
+    renderBots();
+  } catch (err) {
+    console.error("Error cargando bots:", err);
+    grid.innerHTML = `<div class="empty-state">❌ Error conectando al servidor: ${err.message}</div>`;
+  }
+}
+
+function renderBots() {
+  const grid = document.getElementById("bots-grid");
+  if (!botsCache.length) {
+    grid.innerHTML = '<div class="empty-state">No hay streamers aún. ¡Añade uno abajo! 👇</div>';
+    return;
+  }
+
+  grid.innerHTML = botsCache.map(bot => {
+    const keys = keysCache[bot.id] ?? [];
+    const chips = keys.map(k => `
+      <div class="platform-chip">
+        <span class="dot"></span>
+        <span>${k.platform}</span>
+        <button title="Eliminar" onclick="deleteKey('${k.id}','${bot.id}')">✕</button>
+      </div>`).join("");
+
+    const isRunning = bot.running === true;
+
+    return `
+      <div class="bot-card" id="bot-${bot.id}">
+        <div class="bot-header">
+          <div class="bot-avatar">${getBotEmoji(bot.name)}</div>
+          <div>
+            <div class="bot-name">${bot.name} ${isRunning ? '<span style="color:var(--green);font-size:.7rem">● EN VIVO</span>' : ''}</div>
+            <div class="bot-user">@${bot.mc_username}</div>
+          </div>
+        </div>
+        <div class="bot-personality">${bot.personality}</div>
+        <div class="platforms">
+          ${chips || '<span style="color:var(--muted);font-size:.78rem">Sin plataformas</span>'}
+        </div>
+        <div class="bot-actions">
+          ${isRunning
+            ? `<button class="btn btn-danger btn-sm" onclick="stopBot('${bot.id}')">⏹ Stop</button>`
+            : `<button class="btn btn-success btn-sm" onclick="startBot('${bot.id}')">▶ Start</button>`
+          }
+          <button class="btn btn-ghost btn-sm" onclick="testBot('${bot.id}','${bot.name}')" ${isRunning ? 'disabled' : ''}>🧪 Test</button>
+          <button class="btn btn-ghost btn-sm" onclick="openModal('${bot.id}')">🔑 Key</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteBot('${bot.id}')">✕</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+
+// ── Create bot ─────────────────────────────────────────────────────────────
+async function createBot() {
+  const name = document.getElementById("f-name").value.trim();
+  const mc_username = document.getElementById("f-user").value.trim();
+  const personality = document.getElementById("f-personality").value.trim();
+  const voice = document.getElementById("f-voice").value.trim();
+
+  if (!name || !mc_username || !personality) {
+    toast("⚠️ Nombre, usuario y personalidad son obligatorios");
+    return;
+  }
+
+  const res = await apiFetch("/api/bots", {
+    method: "POST",
+    body: JSON.stringify({ name, mc_username, personality, voice: voice || undefined }),
+  });
+
+  if (res.ok) {
+    toast(`✅ ${name} creado!`);
+    clearForm();
+    loadBots();
+  } else {
+    toast("❌ Error: " + res.error);
+  }
+}
+
+async function startBot(id) {
+  const res = await apiFetch(`/api/bots/${id}/start`, { method: "POST", body: "{}" });
+  if (res.ok) { toast("▶ Bot iniciado — conectando al servidor MC..."); loadBots(); }
+  else toast("❌ " + res.error);
+}
+
+async function stopBot(id) {
+  const res = await apiFetch(`/api/bots/${id}/stop`, { method: "POST", body: "{}" });
+  if (res.ok) { toast("⏹ Bot detenido"); loadBots(); }
+  else toast("❌ " + res.error);
+}
+
+async function deleteBot(id) {
+  if (!confirm("¿Eliminar este streamer?")) return;
+  await apiFetch(`/api/bots/${id}`, { method: "DELETE" });
+  toast("🗑 Streamer eliminado");
+  loadBots();
+}
+
+function clearForm() {
+  ["f-name","f-user","f-personality","f-voice"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+}
+
+// ── Stream keys ────────────────────────────────────────────────────────────
+let activePlat = "twitch";
+
+function openModal(botId) {
+  document.getElementById("modal-bot-id").value = botId;
+  document.getElementById("m-rtmp").value = RTMP_URLS.twitch;
+  document.getElementById("m-key").value = "";
+  activePlat = "twitch";
+  document.querySelectorAll(".plat-btn").forEach(b => b.classList.toggle("active", b.dataset.plat === "twitch"));
+  document.getElementById("key-modal").classList.add("open");
+}
+
+function closeModal() {
+  document.getElementById("key-modal").classList.remove("open");
+}
+
+function selectPlat(btn) {
+  activePlat = btn.dataset.plat;
+  document.querySelectorAll(".plat-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("m-rtmp").value = RTMP_URLS[activePlat] ?? "";
+}
+
+async function saveKey() {
+  const bot_id = document.getElementById("modal-bot-id").value;
+  const rtmp_url = document.getElementById("m-rtmp").value.trim();
+  const stream_key = document.getElementById("m-key").value.trim();
+
+  if (!stream_key) { toast("⚠️ Introduce la stream key"); return; }
+
+  const res = await apiFetch(`/api/bots/${bot_id}/stream_keys`, {
+    method: "POST",
+    body: JSON.stringify({ platform: activePlat, rtmp_url, stream_key }),
+  });
+
+  if (res.ok) {
+    toast(`✅ ${activePlat} añadida!`);
+    closeModal();
+    loadBots();
+  } else {
+    toast("❌ " + res.error);
+  }
+}
+
+async function deleteKey(keyId, botId) {
+  await apiFetch(`/api/stream_keys/${keyId}`, { method: "DELETE" });
+  const { stream_keys } = await apiFetch(`/api/bots/${botId}/stream_keys`);
+  keysCache[botId] = stream_keys ?? [];
+  renderBots();
+}
+
+// ── Test mode ──────────────────────────────────────────────────────────────
+let testBotId = null;
+let testInterval = null;
+
+async function testBot(id, name) {
+  testBotId = id;
+  document.getElementById("test-bot-name").textContent = name;
+  document.getElementById("test-state").textContent = "Conectando al servidor MC...";
+  document.getElementById("test-status-badge").textContent = "conectando...";
+  document.getElementById("test-modal").classList.add("open");
+
+  let res;
+  try {
+    res = await fetch(`/api/bots/${id}/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    res = await res.json();
+  } catch (e) {
+    document.getElementById("test-state").textContent = "❌ Error de red: " + e.message;
+    return;
+  }
+
+  if (!res.ok) {
+    document.getElementById("test-state").textContent = "❌ " + res.error;
+    return;
+  }
+
+  document.getElementById("test-state").textContent = "⏳ Worker iniciado, esperando que el bot entre al servidor...";
+
+  // Polling del estado cada 3s
+  testInterval = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/bots/${id}/state`);
+      const data = await r.json();
+      if (data.ok && data.state) {
+        const st = data.state;
+        document.getElementById("test-status-badge").textContent = "● conectado";
+        document.getElementById("test-status-badge").style.cssText =
+          "background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green);border-color:color-mix(in srgb,var(--green) 30%,transparent)";
+        document.getElementById("test-state").innerHTML = `<pre style="margin:0;font-size:.8rem;line-height:1.6">❤  Salud:    ${st.health}/20       🍗 Comida: ${st.food}/20
+📍 Posición: X:${st.position?.[0]}  Y:${st.position?.[1]}  Z:${st.position?.[2]}
+🌅 Hora:     ${st.time_of_day}       🌿 Bioma:  ${st.biome}
+
+🎒 Inventario:
+   ${st.inventory?.length ? st.inventory.join(', ') : 'vacío'}
+
+🧱 Bloques cercanos:
+   ${st.nearby_blocks?.length ? st.nearby_blocks.join(', ') : 'ninguno'}
+
+👾 Entidades:
+   ${st.nearby_entities?.length ? st.nearby_entities.join(', ') : 'ninguna'}</pre>`;
+      } else if (data.error) {
+        document.getElementById("test-state").textContent = "⏳ " + data.error + " (reintentando...)";
+      }
+    } catch (e) {
+      document.getElementById("test-state").textContent = "⏳ Worker iniciando... (" + e.message + ")";
+    }
+  }, 3000);
+
+  loadBots();
+}
+
+function stopTestBot() {
+  if (testInterval) { clearInterval(testInterval); testInterval = null; }
+  if (testBotId) { apiFetch(`/api/bots/${testBotId}/stop`, { method: "POST", body: "{}" }); }
+  testBotId = null;
+  closeTestModal();
+  loadBots();
+}
+
+function closeTestModal() {
+  if (testInterval) { clearInterval(testInterval); testInterval = null; }
+  document.getElementById("test-modal").classList.remove("open");
+}
+
+// ── Status check ───────────────────────────────────────────────────────────
+async function checkStatus() {
+  try {
+    const data = await apiFetch("/api/status");
+    document.getElementById("status-text").textContent =
+      data.status === "ok" ? `sistema activo · MC: ${data.mc_server}` : data.status;
+  } catch {
+    document.getElementById("status-text").textContent = "sin conexión";
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+checkStatus();
+loadBots();
+</script>
+</body>
+</html>
