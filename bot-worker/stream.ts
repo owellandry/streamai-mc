@@ -56,10 +56,16 @@ export async function startStream(config: StreamConfig): Promise<void> {
     console.log(`[stream:${config.botName}] ya está activo`);
     return;
   }
-  if (config.targets.length === 0) throw new Error("Sin targets RTMP");
+  if (config.targets.length === 0) {
+    console.warn(`[stream:${config.botName}] ⚠️  Sin targets RTMP configurados - streaming deshabilitado`);
+    return; // Don't throw, just skip streaming
+  }
 
   const chromePath = findChrome();
-  if (!chromePath) throw new Error("Chrome/Edge no encontrado. Define CHROME_PATH.");
+  if (!chromePath) {
+    console.warn(`[stream:${config.botName}] ⚠️  Chrome/Edge no encontrado - streaming deshabilitado (define CHROME_PATH para habilitar)`);
+    return; // Don't throw, just skip streaming
+  }
 
   const width = config.width ?? 1280;
   const height = config.height ?? 720;
@@ -67,26 +73,37 @@ export async function startStream(config: StreamConfig): Promise<void> {
   const videoBitrate = config.videoBitrate ?? "2500k";
   const audioBitrate = config.audioBitrate ?? "128k";
 
-  console.log(`[stream:${config.botName}] 🎬 ${width}x${height}@${fps}fps → ${config.targets.map(t => t.platform).join(",")}`);
+  console.log(`[stream:${config.botName}] 🎬 Iniciando stream ${width}x${height}@${fps}fps → ${config.targets.map(t => t.platform).join(",")}`);
 
-  // 1) Launch headless Chrome with the viewer
-  browser = await puppeteer.launch({
-    executablePath: chromePath,
-    headless: true,
-    args: [
-      "--no-sandbox", "--disable-setuid-sandbox",
-      "--enable-webgl", "--use-gl=swiftshader",
-      "--ignore-gpu-blocklist", "--ignore-gpu-blacklist",
-      `--window-size=${width},${height}`,
-      "--hide-scrollbars", "--mute-audio", "--autoplay-policy=no-user-gesture-required",
-    ],
-    defaultViewport: { width, height },
-  });
+  try {
+    // 1) Launch headless Chrome with the viewer
+    browser = await puppeteer.launch({
+      executablePath: chromePath,
+      headless: true,
+      args: [
+        "--no-sandbox", "--disable-setuid-sandbox",
+        "--enable-webgl", "--use-gl=swiftshader",
+        "--ignore-gpu-blocklist", "--ignore-gpu-blacklist",
+        `--window-size=${width},${height}`,
+        "--hide-scrollbars", "--mute-audio", "--autoplay-policy=no-user-gesture-required",
+      ],
+      defaultViewport: { width, height },
+    });
+    console.log(`[stream:${config.botName}] ✓ Chrome lanzado`);
 
-  page = await browser.newPage();
-  await page.setViewport({ width, height });
-  await page.goto(config.viewerUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
-  await new Promise(r => setTimeout(r, 6000)); // let WebGL + chunks warm up
+    page = await browser.newPage();
+    await page.setViewport({ width, height });
+    console.log(`[stream:${config.botName}] ✓ Conectando al viewer en ${config.viewerUrl}...`);
+    await page.goto(config.viewerUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await new Promise(r => setTimeout(r, 6000)); // let WebGL + chunks warm up
+    console.log(`[stream:${config.botName}] ✓ Viewer cargado`);
+  } catch (err: any) {
+    console.error(`[stream:${config.botName}] ❌ Error iniciando Chrome/viewer: ${err.message}`);
+    // Cleanup on failure
+    try { await browser?.close(); } catch {}
+    browser = null; page = null;
+    return;
+  }
 
   // 2) Spawn ffmpeg: image2pipe (mjpeg) input + audio + RTMP output
   const ffArgs: string[] = [
@@ -125,38 +142,61 @@ export async function startStream(config: StreamConfig): Promise<void> {
     ffArgs.push("-flags", "+global_header", "-f", "tee", tee);
   }
 
-  ffmpeg = spawn("ffmpeg", ffArgs, { stdio: ["pipe", "ignore", "pipe"] });
-  ffmpeg.stderr?.on("data", (chunk: Buffer) => {
-    const s = chunk.toString();
-    // Show meaningful errors only
-    if (/Connection refused|Cannot open|Failed|Invalid|No such|Unknown|Error/.test(s)) {
-      console.warn(`[stream:${config.botName}] ${s.slice(0, 250).trim()}`);
-    }
-  });
-  ffmpeg.stdin?.on("error", () => {}); // silence EPIPE on shutdown
-  ffmpeg.on("exit", (code) => {
-    console.log(`[stream:${config.botName}] ffmpeg exit code=${code}`);
-    isStreaming = false;
-  });
-  ffmpeg.on("error", (err) => console.warn(`[stream:${config.botName}] ffmpeg error: ${err.message}`));
+  try {
+    ffmpeg = spawn("ffmpeg", ffArgs, { stdio: ["pipe", "ignore", "pipe"] });
+    ffmpeg.stderr?.on("data", (chunk: Buffer) => {
+      const s = chunk.toString();
+      // Show meaningful errors only
+      if (/Connection refused|Cannot open|Failed|Invalid|No such|Unknown|Error/.test(s)) {
+        console.warn(`[stream:${config.botName}] ${s.slice(0, 250).trim()}`);
+      }
+    });
+    ffmpeg.stdin?.on("error", () => {}); // silence EPIPE on shutdown
+    ffmpeg.on("exit", (code) => {
+      console.log(`[stream:${config.botName}] ffmpeg exit code=${code}`);
+      isStreaming = false;
+    });
+    ffmpeg.on("error", (err) => {
+      console.warn(`[stream:${config.botName}] ffmpeg error: ${err.message}`);
+      isStreaming = false;
+    });
+    console.log(`[stream:${config.botName}] ✓ ffmpeg iniciado`);
+  } catch (err: any) {
+    console.error(`[stream:${config.botName}] ❌ Error iniciando ffmpeg (¿está instalado?): ${err.message}`);
+    try { await page?.close(); } catch {}
+    try { await browser?.close(); } catch {}
+    browser = null; page = null;
+    return;
+  }
 
   // 3) Start CDP screencast and pipe frames to ffmpeg
-  cdp = await page.createCDPSession();
-  cdp.on("Page.screencastFrame", async (params: any) => {
-    try {
-      if (ffmpeg?.stdin?.writable) {
-        ffmpeg.stdin.write(Buffer.from(params.data, "base64"));
-      }
-      if (cdp) await cdp.send("Page.screencastFrameAck", { sessionId: params.sessionId });
-    } catch {}
-  });
-  await cdp.send("Page.startScreencast", {
-    format: "jpeg",
-    quality: 80,
-    maxWidth: width,
-    maxHeight: height,
-    everyNthFrame: 1,
-  });
+  try {
+    cdp = await page.createCDPSession();
+    cdp.on("Page.screencastFrame", async (params: any) => {
+      try {
+        if (ffmpeg?.stdin?.writable) {
+          ffmpeg.stdin.write(Buffer.from(params.data, "base64"));
+        }
+        if (cdp) await cdp.send("Page.screencastFrameAck", { sessionId: params.sessionId });
+      } catch {}
+    });
+    await cdp.send("Page.startScreencast", {
+      format: "jpeg",
+      quality: 80,
+      maxWidth: width,
+      maxHeight: height,
+      everyNthFrame: 1,
+    });
+    console.log(`[stream:${config.botName}] ✓ Screencast iniciado`);
+  } catch (err: any) {
+    console.error(`[stream:${config.botName}] ❌ Error iniciando screencast: ${err.message}`);
+    // Cleanup on failure
+    try { ffmpeg?.kill("SIGKILL"); } catch {}
+    try { await page?.close(); } catch {}
+    try { await browser?.close(); } catch {}
+    ffmpeg = null; cdp = null; page = null; browser = null;
+    return;
+  }
 
   isStreaming = true;
   console.log(`[stream:${config.botName}] ✅ activo`);
