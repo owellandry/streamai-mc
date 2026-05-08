@@ -1059,9 +1059,20 @@ process.once("SIGINT", () => { cleanup("SIGINT"); setTimeout(() => process.exit(
 function getState() {
   if (!bot.entity) {
     return { health: 0, food: 0, position: [0, 0, 0], inventory: [], nearby_blocks: [],
-      nearby_entities: [], time_of_day: "—", stage: "wood", current_goal: currentGoal, uptime_s: 0 };
+      nearby_entities: [], time_of_day: "—", biome: "unknown", stage: "wood", current_goal: currentGoal, uptime_s: 0 };
   }
   const pos = bot.entity.position;
+  // Get biome if available (requires minecraft-data)
+  let biome = "unknown";
+  try {
+    const block = bot.blockAt(bot.entity.position);
+    if (block && bot.world && typeof (bot.world as any).getBiome === 'function') {
+      const biomeId = (bot.world as any).getBiome(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z));
+      const biomeData = (bot.registry as any)?.biomesArray?.[biomeId];
+      biome = biomeData?.name ?? `biome_${biomeId}`;
+    }
+  } catch {}
+
   return {
     health: bot.health ?? 20, food: bot.food ?? 20,
     position: [Math.round(pos.x), Math.round(pos.y), Math.round(pos.z)],
@@ -1069,6 +1080,7 @@ function getState() {
     nearby_blocks: world.getNearbyBlockTypes(bot, 16).slice(0, 15),
     nearby_entities: world.getNearbyEntityTypes(bot).slice(0, 8),
     time_of_day: (bot.time?.timeOfDay ?? 0) < 13000 ? "dia" : "noche",
+    biome,
     stage: getStage(), current_goal: currentGoal,
     uptime_s: Math.round((Date.now() - startTime) / 1000),
     ai_provider: AI_PROVIDER, is_busy: isBusy,
