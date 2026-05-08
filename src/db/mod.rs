@@ -90,6 +90,12 @@ pub async fn seed_defaults(pool: &SqlitePool) -> Result<()> {
         ("bot-mika",    "Mika",   "Exploradora curiosa y paciente. Le gusta descubrir biomas y construir bases bonitas. Siempre lleva antorchas y comida extra. Nunca tiene prisa pero siempre progresa.",             "mika"),
     ];
 
+    // Migrate: remove any bots whose ID is not one of our stable slug-based IDs
+    let _stable_ids = ["bot-nyx", "bot-raze", "bot-bochimc", "bot-flick", "bot-mika"];
+    sqlx::query(
+        "DELETE FROM bots WHERE id NOT IN ('bot-nyx','bot-raze','bot-bochimc','bot-flick','bot-mika')"
+    ).execute(pool).await?;
+
     // Upsert: insert if not exists, update name/personality/avatar if already there.
     // Using stable IDs (slug-based) so stream_keys are NEVER lost on restart.
     for (id, name, personality, slug) in &bots {
