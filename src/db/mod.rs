@@ -1,7 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct Bot {
@@ -84,24 +83,29 @@ pub async fn init(database_url: &str) -> Result<SqlitePool> {
 /// Insertar los 5 personajes por defecto si la DB está vacía
 pub async fn seed_defaults(pool: &SqlitePool) -> Result<()> {
     let bots = vec![
-        ("Nyx",   "Estratega fría y calculadora. Planifica cada paso antes de actuar. Nunca desperdicia recursos. Siempre prioriza herramientas antes de explorar. Sabe que sin pico no se mina piedra.",  "nyx"),
-        ("Raze",  "Guerrero valiente pero listo. Ama pelear pero sabe que necesita espada y armadura primero. Busca hierro rápido para equiparse. Protege a los demás bots si los ve.",               "raze"),
-        ("Bochimc", "Tímida y precavida. Le da miedo la noche así que siempre busca cama primero. Prefiere ir a lo seguro: comida, refugio, y después aventura. Se asusta con los creepers. pero experta en el minecraft, su mision es pasarlo completamente, y no se detiene hasta lograrlo",               "bochimc"),
-        ("Flick", "Speedrunner que conoce el meta. Sabe la progresión perfecta: madera→piedra→hierro→diamante→nether→end. Optimiza cada segundo pero respeta el orden de crafteo.",                        "flick"),
-        ("Mika",  "Exploradora curiosa y paciente. Le gusta descubrir biomas y construir bases bonitas. Siempre lleva antorchas y comida extra. Nunca tiene prisa pero siempre progresa.",             "mika"),
+        ("bot-nyx",     "Nyx",    "Estratega fría y calculadora. Planifica cada paso antes de actuar. Nunca desperdicia recursos. Siempre prioriza herramientas antes de explorar. Sabe que sin pico no se mina piedra.",  "nyx"),
+        ("bot-raze",    "Raze",   "Guerrero valiente pero listo. Ama pelear pero sabe que necesita espada y armadura primero. Busca hierro rápido para equiparse. Protege a los demás bots si los ve.",               "raze"),
+        ("bot-bochimc", "Bochimc","Tímida y precavida. Le da miedo la noche así que siempre busca cama primero. Prefiere ir a lo seguro: comida, refugio, y después aventura. Se asusta con los creepers. pero experta en el minecraft, su mision es pasarlo completamente, y no se detiene hasta lograrlo", "bochimc"),
+        ("bot-flick",   "Flick",  "Speedrunner que conoce el meta. Sabe la progresión perfecta: madera→piedra→hierro→diamante→nether→end. Optimiza cada segundo pero respeta el orden de crafteo.",                        "flick"),
+        ("bot-mika",    "Mika",   "Exploradora curiosa y paciente. Le gusta descubrir biomas y construir bases bonitas. Siempre lleva antorchas y comida extra. Nunca tiene prisa pero siempre progresa.",             "mika"),
     ];
 
-    // Always recreate bots with latest names/personalities
-    sqlx::query("DELETE FROM bots").execute(pool).await?;
-    for (name, personality, slug) in &bots {
+    // Upsert: insert if not exists, update name/personality/avatar if already there.
+    // Using stable IDs (slug-based) so stream_keys are NEVER lost on restart.
+    for (id, name, personality, slug) in &bots {
         sqlx::query(
-            "INSERT INTO bots (id, name, personality, avatar_dir, mc_username) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO bots (id, name, personality, avatar_dir, mc_username)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               name        = excluded.name,
+               personality = excluded.personality,
+               avatar_dir  = excluded.avatar_dir",
         )
-        .bind(Uuid::new_v4().to_string())
+        .bind(id)
         .bind(name)
         .bind(personality)
         .bind(format!("assets/avatars/{slug}"))
-        .bind(name.to_lowercase())
+        .bind(slug)
         .execute(pool)
         .await?;
     }
